@@ -77,6 +77,8 @@ public protocol PlayerDelegate: class {
 
     func playerPlaybackWillStartFromBeginning(player: Player)
     func playerPlaybackDidEnd(player: Player)
+    
+    func playerTimeIntervalDidUpdate(player: Player, itemDuration: CMTime, interval: CMTime)
 }
 
 // KVO contexts
@@ -170,6 +172,8 @@ public class Player: UIViewController {
     private var player: AVPlayer!
     private var playerView: PlayerView!
 
+    private var timeObserver: AnyObject?
+    
     // MARK: object lifecycle
 
     public convenience init() {
@@ -184,6 +188,16 @@ public class Player: UIViewController {
         self.bufferingState = .Unknown
     }
 
+    public convenience init(_ interval: CMTime?) {
+        self.init()
+        
+        if let periodicInterval = interval {
+            self.timeObserver = self.player.addPeriodicTimeObserverForInterval(periodicInterval, queue: nil) { (time:CMTime) -> Void in
+                self.delegate?.playerTimeIntervalDidUpdate(self, itemDuration: (self.playerItem?.asset.duration)!, interval: time)
+            }
+        }
+    }
+    
     deinit {
         self.playerView?.player = nil
         self.delegate = nil
@@ -194,6 +208,10 @@ public class Player: UIViewController {
 
         self.player.removeObserver(self, forKeyPath: PlayerRateKey, context: &PlayerObserverContext)
 
+        if let uwTimeObserver = self.timeObserver {
+            self.player.removeTimeObserver(uwTimeObserver)
+        }
+        
         self.player.pause()
 
         self.setupPlayerItem(nil)
