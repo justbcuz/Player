@@ -171,8 +171,30 @@ public class Player: UIViewController {
 
     private var player: AVPlayer!
     private var playerView: PlayerView!
-
-    private var timeObserver: AnyObject?
+    
+    private var _timeObserver: AnyObject? = nil
+    private var _timeObserverInterval: CMTime? = nil
+    public var timeObserverInterval: CMTime? {
+        get {
+            return self._timeObserverInterval
+        }
+        set {
+            
+            if let timeObserver = self._timeObserver {
+                self.player.removeTimeObserver(timeObserver)
+                self._timeObserver = nil;
+            }
+            
+            self._timeObserverInterval = newValue
+            
+            if let timeObserverInterval = newValue {
+                self._timeObserver = self.player.addPeriodicTimeObserverForInterval(timeObserverInterval, queue: nil) { (time:CMTime) -> Void in
+                    self.delegate?.playerTimeIntervalDidUpdate(self, itemDuration: (self.playerItem?.asset.duration)!, interval: time)
+                }
+            }
+        }
+    }
+    
     
     // MARK: object lifecycle
 
@@ -190,27 +212,19 @@ public class Player: UIViewController {
 
     public convenience init(_ interval: CMTime?) {
         self.init()
-        
-        if let periodicInterval = interval {
-            self.timeObserver = self.player.addPeriodicTimeObserverForInterval(periodicInterval, queue: nil) { (time:CMTime) -> Void in
-                self.delegate?.playerTimeIntervalDidUpdate(self, itemDuration: (self.playerItem?.asset.duration)!, interval: time)
-            }
-        }
+        self.timeObserverInterval = interval
     }
     
     deinit {
         self.playerView?.player = nil
         self.delegate = nil
-
+        self.timeObserverInterval = nil
+        
         NSNotificationCenter.defaultCenter().removeObserver(self)
 
         self.playerView?.layer.removeObserver(self, forKeyPath: PlayerReadyForDisplay, context: &PlayerLayerObserverContext)
 
         self.player.removeObserver(self, forKeyPath: PlayerRateKey, context: &PlayerObserverContext)
-
-        if let uwTimeObserver = self.timeObserver {
-            self.player.removeTimeObserver(uwTimeObserver)
-        }
         
         self.player.pause()
 
